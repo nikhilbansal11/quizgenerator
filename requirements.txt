@@ -1,5 +1,5 @@
 fastapi==0.103.1
 pydantic==2.0.3
 python-dotenv==1.0.1
-google-generativeai==0.2.0
+google-generativeai==0.2.4
 gunicorn==21.2.0
