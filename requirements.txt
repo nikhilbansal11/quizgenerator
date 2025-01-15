@@ -4,3 +4,4 @@ python-dotenv
 google-generativeai
 vertexai
 uvicorn
+gunicorn
