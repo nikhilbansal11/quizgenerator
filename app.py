@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 import json
 import os
+from flask_cors import CORS 
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +15,7 @@ genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-pro')
 
 app = Flask(__name__)
+CORS(app)
 
 class QuizQuestion:
     def __init__(self, question: str, options: List[str], correctOption: str):
