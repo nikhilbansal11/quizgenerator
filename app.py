@@ -1,12 +1,9 @@
 from typing import List, Dict, Optional
 import google.generativeai as genai
-from fastapi import FastAPI, HTTPException, Depends, Security
-from fastapi.security import APIKeyHeader
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from flask import Flask, request, jsonify
+from dotenv import load_dotenv
 import json
 import os
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -16,16 +13,27 @@ GOOGLE_API_KEY = "AIzaSyBvEWR0peDVveZ-0VX2f1KDdQ6giMKUZjw"
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-pro')
 
-class QuizQuestion(BaseModel):
-    question: str
-    options: List[str]
-    correctOption: str
+app = Flask(__name__)
 
-class QuizRequest(BaseModel):
-    prompt: str
-    text: str
-    num_questions: int
-    default_prompt: Optional[str] = None
+class QuizQuestion:
+    def __init__(self, question: str, options: List[str], correctOption: str):
+        self.question = question
+        self.options = options
+        self.correctOption = correctOption
+    
+    def to_dict(self):
+        return {
+            "question": self.question,
+            "options": self.options,
+            "correctOption": self.correctOption
+        }
+
+class QuizRequest:
+    def __init__(self, prompt: str, text: str, num_questions: int, default_prompt: Optional[str] = None):
+        self.prompt = prompt
+        self.text = text
+        self.num_questions = num_questions
+        self.default_prompt = default_prompt or "Generate educational quiz questions from the given text."
 
 def extract_json_from_response(response_text: str) -> List[Dict]:
     """
@@ -63,7 +71,6 @@ def generate_quiz(
     Returns:
         List[Dict]: List of quiz questions with options and correct answers
     """
-    
     # Use provided prompt or fall back to default
     final_prompt = prompt or default_prompt
     
@@ -106,54 +113,34 @@ def generate_quiz(
     except Exception as e:
         raise Exception(f"Error generating quiz: {str(e)}")
 
-# FastAPI Implementation
-app = FastAPI(title="Quiz Generator API")
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=json.loads(os.getenv('ALLOWED_ORIGINS', '["*"]')),  # Load from env or allow all
-    allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
-    expose_headers=["*"]  # Expose all headers
-)
-
-# API Key security
-api_key_header = APIKeyHeader(name="X-API-Key")
-
-def get_api_key(api_key = "AIzaSyBvEWR0peDVveZ-0VX2f1KDdQ6giMKUZjw"):
-    # if api_key != os.getenv('API_KEY'):
-    #     raise HTTPException(
-    #         status_code=401,
-    #         detail="Invalid API Key"
-    #     )
-    
-    api_key = "AIzaSyBvEWR0peDVveZ-0VX2f1KDdQ6giMKUZjw"
-    return api_key
-
-@app.post("/generate-quiz", response_model=List[QuizQuestion])
-async def create_quiz(
-    request: QuizRequest,
-    api_key: str = Depends(get_api_key)
-):
+@app.route('/generate-quiz', methods=['POST'])
+def create_quiz():
     """
     Generate a quiz based on provided text and parameters.
     """
     try:
+        data = request.json
+        quiz_request = QuizRequest(
+            prompt=data.get("prompt", ""),
+            text=data["text"],
+            num_questions=data["num_questions"],
+            default_prompt=data.get("default_prompt")
+        )
+        
         quiz = generate_quiz(
-            prompt=request.prompt,
-            text=request.text,
-            num_questions=request.num_questions,
-            default_prompt=request.default_prompt
+            prompt=quiz_request.prompt,
+            text=quiz_request.text,
+            num_questions=quiz_request.num_questions,
+            default_prompt=quiz_request.default_prompt
         )
-        return quiz
+        
+        # Convert quiz questions to list of QuizQuestion objects
+        quiz_questions = [QuizQuestion(q['question'], q['options'], q['correctOption']).to_dict() for q in quiz]
+        return jsonify(quiz_questions), 200
+    
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Set Flask app to production-ready (ensure the app is ready for deployment)
+    app.run(host='0.0.0.0', port=8000, debug=False)
